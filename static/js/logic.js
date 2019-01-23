@@ -1,78 +1,115 @@
-// An array of cities and their locations
-var cities = [
-  {
-    name: 'Paris',
-    location: [48.8566, 2.3522]
-  },
-  {
-    name: 'Lyon',
-    location: [45.764, 4.8357]
-  },
-  {
-    name: 'Cannes',
-    location: [43.5528, 7.0174]
-  },
-  {
-    name: 'Nantes',
-    location: [47.2184, -1.5536]
-  }
-];
+var url =
+  'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson';
 
-// An array which will be used to store created cityMarkers
-var cityMarkers = [];
-
-for (var i = 0; i < cities.length; i++) {
-  // loop through the cities array, create a new marker, push it to the cityMarkers array
-  cityMarkers.push(
-    L.marker(cities[i].location).bindPopup('<h1>' + cities[i].name + '</h1>')
-  );
-}
-
-// Add all the cityMarkers to a new layer group.
-// Now we can handle them as one group instead of referencing each individually
-var cityLayer = L.layerGroup(cityMarkers);
-
-// Define variables for our tile layers
-var light = L.tileLayer(
-  'https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}',
-  {
-    attribution:
-      'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
-    maxZoom: 18,
-    id: 'mapbox.light',
-    accessToken: API_KEY
-  }
-);
-
-var dark = L.tileLayer(
-  'https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}',
-  {
-    attribution:
-      'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
-    maxZoom: 18,
-    id: 'mapbox.dark',
-    accessToken: API_KEY
-  }
-);
-
-// Only one base layer can be shown at a time
-var baseMaps = {
-  Light: light,
-  Dark: dark
-};
-
-// Overlays that may be toggled on or off
-var overlayMaps = {
-  Cities: cityLayer
-};
-
-// Create map object and set default layers
-var myMap = L.map('map', {
-  center: [46.2276, 2.2137],
-  zoom: 6,
-  layers: [light, cityLayer]
+d3.json(url, function(data) {
+  // Once we get a response, send the data.features object to the createFeatures function
+  createFeatures(data.features);
+  console.log(data.features);
 });
 
-// Pass our map layers into our layer control
-// Add the layer control to the map
-L.control.layers(baseMaps, overlayMaps).addTo(myMap);
+function createFeatures(earthquakeData) {
+  // Define a function we want to run once for each feature in the features array
+  // Give each feature a popup describing the place and time of the earthquake
+
+  function onEachFeature(feature, layer) {
+    layer.bindPopup(
+      '<h3>' +
+        'Magnitude: ' +
+        feature.properties.mag +
+        '</h3><hr> <b>' +
+        feature.properties.place +
+        '</b><br>' +
+        new Date(feature.properties.time) +
+        ''
+    );
+  }
+
+  function circleColor(magnitude) {
+    var color = '';
+    if (magnitude > 5) {
+      color = 'Red';
+    } else if (magnitude > 4) {
+      color = 'DarkOrange';
+    } else if (magnitude > 3) {
+      color = 'Orange';
+    } else if (magnitude > 2) {
+      color = '#ffe066';
+    } else if (magnitude > 1) {
+      color = '#ccff33';
+    } else {
+      color = '#aed75b';
+    }
+    return color;
+  }
+
+  // Create a GeoJSON layer containing the features array on the earthquakeData object
+  // Run the onEachFeature function once for each piece of data in the array
+  var earthquakes = L.geoJSON(earthquakeData, {
+    onEachFeature: onEachFeature,
+    pointToLayer: function(feature, layer) {
+      return L.circleMarker(layer, {
+        radius: feature.properties.mag * 3,
+        fillColor: circleColor(feature.properties.mag),
+        color: 'grey',
+        weight: 1,
+        opacity: 0.75,
+        fillOpacity: 0.75
+      });
+    }
+  });
+
+  // Sending our earthquakes layer to the createMap function
+  createMap(earthquakes);
+}
+
+function createMap(earthquakes) {
+  // Define lightmap and darkmap layers
+  var lightmap = L.tileLayer(
+    'https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}',
+    {
+      attribution:
+        'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+      maxZoom: 18,
+      id: 'mapbox.light',
+      accessToken: API_KEY
+    }
+  );
+
+  var satellitemap = L.tileLayer(
+    'https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}',
+    {
+      attribution:
+        'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+      maxZoom: 18,
+      id: 'mapbox.satellite',
+      accessToken: API_KEY
+    }
+  );
+
+  // Define a baseMaps object to hold our base layers
+  var baseMaps = {
+    'Light Map': lightmap,
+    'Satelite Map': satellitemap
+  };
+
+  // Create overlay object to hold our overlay layer
+  var overlayMaps = {
+    Earthquakes: earthquakes
+  };
+
+  // Create our map, giving it the lightmap and earthquakes layers to display on load
+  var myMap = L.map('map', {
+    center: [37.09, 0],
+    zoom: 2,
+    layers: [lightmap, earthquakes]
+  });
+
+  // Create a layer control
+  // Pass in our baseMaps and overlayMaps
+  // Add the layer control to the map
+  L.control
+    .layers(baseMaps, overlayMaps, {
+      collapsed: false
+    })
+    .addTo(myMap);
+}
